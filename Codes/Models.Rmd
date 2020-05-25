@@ -1,0 +1,197 @@
+---
+title: "Regression Models"
+output: html_document
+---
+
+```{r}
+# Import libraries
+library(tidyverse)
+library(sjPlot)
+library(stargazer)
+library(ggthemes)
+```
+
+
+```{r}
+# Load the datasets
+df <- readRDS("final_df17.RData")
+
+#change reference categories
+df$mspouse_edu <- fct_relevel(df$mspouse_edu, "Low", "Middle", "High")
+df$mspouse_emp <- fct_relevel(df$mspouse_emp, "Not employed", "Part-time employed", "Full-time employed")
+df$woman_edu <- fct_relevel(df$woman_edu, "Low", "Middle", "High")
+df$woman_emp <- fct_relevel(df$woman_emp, "Not employed", "Part-time employed", "Full-time employed")
+df$num_kids <- fct_relevel(df$num_kids, "childless", "1 child", "2 children", "3 or more children")
+df$pre_school <- fct_relevel(df$pre_school, "Without")
+df$hh_label <- fct_relevel(df$hh_label, "native", "mixed", "migrant")
+```
+
+
+```{r}
+df2 <- df %>% 
+  mutate(poverty_level_pre = case_when(poverty_level_pre == "Not poor" ~ 0,
+                                       TRUE ~ 1),
+         poverty_level_post = case_when(poverty_level_post == "Not poor" ~ 0,
+                                       TRUE ~ 1),
+         hh_label = case_when(hh_label == "native" ~ 1,
+                              hh_label == "mixed" ~ 2,
+                              TRUE ~ 3),
+         woman_age = case_when(woman_age == "25-35" ~ 1,
+                               woman_age == "36-50" ~ 2,
+                               TRUE ~ 3),
+         woman_edu = case_when(woman_edu == "Low" ~ 1,
+                               woman_edu == "Middle" ~ 2,
+                               TRUE ~ 3),
+         woman_emp = case_when(woman_emp == "Not employed" ~ 1,
+                               woman_emp == "Part-time employed" ~ 2,
+                               TRUE ~ 3),
+         mspouse_age = case_when(mspouse_age == "25-35" ~ 1,
+                               mspouse_age == "36-50" ~ 2,
+                               TRUE ~ 3),
+         mspouse_edu = case_when(mspouse_edu == "Low" ~ 1,
+                               mspouse_edu == "Middle" ~ 2,
+                               TRUE ~ 3),
+        mspouse_emp = case_when(mspouse_emp == "Not employed" ~ 1,
+                               mspouse_emp == "Part-time employed" ~ 2,
+                               TRUE ~ 3),
+        num_kids = case_when(num_kids == "childless" ~ 0,
+                             num_kids == "1 child" ~ 1,
+                             num_kids == "2 children" ~ 2,
+                             TRUE ~ 3),
+        pre_school = case_when(pre_school == "Without" ~ 0,
+                                 TRUE ~ 1),
+        ) %>% select(-c("bhhhnr", "pregov_income_eq", "postgov_income_eq", "hh_weight", "syear"))
+write.csv(df2, "df.csv", row.names = FALSE)
+```
+
+```{r}
+# Model 1: post-government
+model1 <- glm(poverty_level_post ~ hh_label+ woman_age+ woman_edu+woman_emp+ num_kids+pre_school+mspouse_age + mspouse_edu+mspouse_emp, 
+              data = df, 
+              family=binomial())
+
+model1_OR <- exp(coef(model1))
+model1_CI <- exp(confint(model1))
+model1_p.values <- list(summary(model1)$coefficients[,4])
+
+stargazer(model1,
+          style = "ajps",
+          coef = list(model1_OR), 
+          p=c(model1_p.values),
+          single.row = F,
+          type = "latex",
+          title = "Binary Logistic Regression",
+          dep.var.labels = c("Poverty"),
+          covariate.labels = c("Mixed", "Migrant", "WAge 36-50", "WAge 51-64", "WMiddle", "WHigh", "WPart-time employed", "WFull-time employed", "1 child", "2 children", "3 or more children", "With", "MAge 36-50", "MAge 51-64", "MMiddle", "MHigh", "MPart-time employed", "MFull-time employed", "Constant"))
+```
+
+```{r}
+# Model 2: Interaction
+model2 <- glm(poverty_level_post ~ hh_label:woman_emp+woman_age+woman_edu+num_kids+pre_school +mspouse_age + mspouse_edu+mspouse_emp,
+              data = df, 
+              family=binomial())
+
+model2_OR <- exp(coef(model2))
+model2_CI <- exp(confint(model2))
+model2_p.values <- list(summary(model2)$coefficients[,4])
+
+stargazer(model2,
+          coef = list(model2_OR), 
+          p=c(model2_p.values),
+          single.row = F,
+          type = "text",
+          title = "Binary Logistic Regression",
+          dep.var.labels = c("Poverty"),
+          out = "model2.doc")
+```
+
+
+```{r}
+# Model 2: Interaction
+model3 <- glm(poverty_level_post ~ woman_emp:hh_label+woman_age+woman_edu+num_kids+pre_school +mspouse_age + mspouse_edu+mspouse_emp,
+              data = df, 
+              family=binomial())
+
+model3_OR <- exp(coef(model3))
+model3_CI <- exp(confint(model3))
+model3_p.values <- list(summary(model3)$coefficients[,4])
+
+stargazer(model3,
+          coef = list(model3_OR), 
+          p=c(model3_p.values),
+          single.row = F,
+          type = "text",
+          title = "Binary Logistic Regression",
+          dep.var.labels = c("Poverty"),
+          out = "model2.doc")
+
+
+
+get_model_data(
+  model2,
+  type = "pred",
+  digits = 2,
+  terms = c("woman_emp", "hh_label")
+)
+
+woman_emp <- rep(c("Not employed", "Part-time employed", "Full-time employed"), 3)
+hh_label <- c(rep("Native", 3), rep("Mixed", 3), rep("Migrant", 3))
+prob <- c(0.71, 0.41, 0.17, 0.69, 0.50, 0.25, 0.88, 0.74, 0.47)
+
+prob_df <- data.frame(emp = woman_emp, hh_label = hh_label, prob = prob) 
+
+prob_df$emp <- factor(prob_df$emp, levels = c("Not employed", "Part-time employed", "Full-time employed"))
+prob_df$hh_label <- factor(prob_df$hh_label, levels = c("Native", "Mixed", "Migrant"))
+
+
+prob_poor <- prob_df %>% 
+  mutate(pos = cumsum(prob) - 0.5*prob) %>% 
+  ggplot(aes(x =  emp, y = prob, fill = hh_label, label = paste0(100 *prob, "%"))) +
+  geom_col(width = 0.8, position = "dodge") +
+  #geom_text(aes(label = paste0(100 * prob, "%")), fontface = "bold", position = position_dodge(width = 0.8)) +
+  geom_bar_text(position = "dodge", place = "top", vjust = 4, fontface = "bold", min.size = 4, size = 15, color = "white") +
+  labs(title = NULL,
+     y = NULL,
+     x = NULL,
+     caption = "The German Socio-Economic Panel Survey, 2017") +
+  scale_fill_manual(values = c("#A8C3BC", "turquoise3", "turquoise4")) +
+  theme_flip
+
+print(prob_poor)
+
+ggsave("prob_poor.png", width = 12, height = 8)
+
+```
+
+
+```{r}
+theme_flip <- theme(panel.background = element_rect(fill = "white", color = "grey"),
+        axis.text = element_text(size = 16, face = "bold"),
+        axis.text.y = element_blank(),
+        axis.title = element_text(size = rel(1)),
+        axis.ticks = element_blank(),
+        axis.line.x = element_line(colour = "grey"),
+        axis.line.y.right = element_line(colour = "grey"),
+        #plot.title = element_text(size=15, hjust = 0, vjust=2.12),
+        legend.position = "bottom",
+        legend.title = element_blank(),
+        legend.text = element_text(size = 16),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        plot.title = element_text(hjust = 0),
+        plot.background = element_rect(fill = "white"),
+        plot.caption = element_text(size = 14, face = "italic"),
+        strip.text.x = element_text(size = 15, face = "bold"),
+        strip.background.x = element_rect(fill = "light grey"))
+```
+
+
+```{r}
+get_model_data(
+  model1,
+  type = "pred",
+  digits = 2,
+  terms = c("hh_label")
+)
+```
+

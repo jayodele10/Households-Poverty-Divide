@@ -1,0 +1,27 @@
+---
+title: "Decomposition"
+output: html_document
+---
+
+
+```{r}
+library(knitr)
+library(fastDummies)
+library(foreign)
+library(dplyr)
+```
+
+```{r}
+df17 <- readRDS("final_df17.RData") 
+df <- dummy_cols(df17)
+df_orig <- df
+
+df <- df %>% select(20:50)
+
+df_names <- c("mage25_35", "mage36_50", "mage51_64", "meduHigh", "meduMid", "meduLow", "mempFull", "mempPart", "mempNot", "fage25_35", "fage36_50", "fage51_64", "feduHigh", "feduMid", "feduLow", "fempFull", "fempPart", "fempNot", "child0", "child1", "child2", "child3more", "pre_notpoor", "pre_relpoor", "post_notpoor", "post_relpoor", "migrant", "mixedh", "native", "presch_without", "presch_with")
+names(df) <- df_names
+write.dta(df, "df17.dta")
+
+
+```
+

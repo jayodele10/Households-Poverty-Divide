@@ -1,0 +1,365 @@
+---
+title: "Descriptive Statistics"
+output: html_document
+---
+
+### DESCRIPTIVE STATISTICS
+
+```{r}
+# Import libraries
+library(ggthemes)
+library(gpairs)
+library(ggrepel)
+#library(extrafont)
+library(RColorBrewer)
+library(descr)
+library(summarytools)
+library(ggfittext)
+```
+
+
+```{r}
+# Load the datasets
+df <- readRDS("final_df17.RData")
+
+#change reference categories
+df$mspouse_edu <- fct_relevel(df$mspouse_edu, "Low", "Middle", "High")
+df$mspouse_emp <- fct_relevel(df$mspouse_emp, "Not employed", "Part-time employed", "Full-time employed")
+df$woman_edu <- fct_relevel(df$woman_edu, "Low", "Middle", "High")
+df$woman_emp <- fct_relevel(df$woman_emp, "Not employed", "Part-time employed", "Full-time employed")
+df$num_kids <- fct_relevel(df$num_kids, "childless")
+df$pre_school<- fct_relevel(df$pre_school, "Without")
+df$hh_label <- fct_relevel(df$hh_label, "native", "mixed", "migrant")
+```
+
+```{r}
+df <- bind_rows(list(df00, df10, df17))
+df <- df %>% mutate(
+  hhnrakt = ifelse(syear == 2000, qhhnr, ifelse(syear == 2010, bahhnr, bhhhnr)),
+  syear = factor(syear)
+) %>% 
+  select(-c(qhhnr, bahhnr, bhhhnr))
+
+rm(df00, df10, df17)
+```
+
+
+```{r}
+# generate sample composition
+
+df %>% group_by(hh_label) %>% dfSummary(round.digits = 2)
+df %>% dfSummary()
+```
+
+
+```{r}
+# Contigency table of poverty rate women's employment status
+
+#2017
+
+ct_pov_pre <- crosstab(df$poverty_level_pre, df$woman_emp, 
+                       plot = FALSE,
+                       dnn =c("Poverty (Pre-gov)", "Household Type"),
+                       prop.c = TRUE)
+
+print(ct_pov_pre)
+
+ct_pov_post <- crosstab(df$poverty_level_post, df$woman_emp, 
+                        plot = FALSE,
+                       dnn =c("Poverty (Post-gov)", "Household Type"),
+                       prop.c = TRUE)
+
+print(ct_pov_post)
+```
+
+
+
+```{r themes, include = FALSE}
+# set new themes for the plots
+theme_flip <- theme(panel.background = element_rect(fill = "white"),
+        axis.text = element_text(size = 15, face = "bold"),
+        axis.text.x = element_blank(),
+        axis.title = element_text(size = rel(1)),
+        axis.ticks = element_blank(),
+        axis.line.y = element_line(colour = "grey"),
+        axis.line.y.right = element_line(colour = "grey"),
+        axis.line.x = element_line(colour = "grey"),
+        axis.line.x.top = element_line(color = "grey"),
+        #plot.title = element_text(size=15, hjust = 0, vjust=2.12),
+        legend.position = "bottom",
+        legend.title = element_blank(),
+        legend.text = element_text(size = 15),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        plot.title = element_text(hjust = 0),
+        plot.background = element_rect(fill = "white"),
+        plot.caption = element_text(size = 14, face = "italic"),
+        strip.text.x = element_text(size = 15, face = "bold"),
+        strip.background.x = element_rect(fill = "light grey"))
+
+caption <- "The German Socio-Economic Panel Survey, 2017"
+
+```
+
+We make a plot of poverty level by household type and women's employment status
+
+```{r}
+pov_hhlabel_pre <- df %>% 
+  group_by(hh_label,woman_emp) %>% 
+  count(woman_emp, poverty_level_pre) %>% 
+  mutate(perc = round(n / sum(n), 3),
+         pos = cumsum(perc) - 0.5*perc,
+          hovertext = paste(woman_emp, "\n", "Number of observations:", n, "\n", paste0("Percentage: ",perc *100,"%"))) %>% 
+  ggplot(aes(x = woman_emp, y = perc, fill = fct_rev(poverty_level_pre), label = ifelse(perc >= 0.04, paste0(100*perc,"% ", "\n", "(",n,")"), ""))) +
+    geom_col(width = 0.3) +
+    geom_bar_text(position = "stack",  reflow = TRUE, colour = "white", place = "center", fontface = "bold", min.size = 3, size = 10) +
+    # geom_text(aes(label = ifelse(perc >= 0.06, paste0(100*perc,"% ", "(",n,")"), ""),y = pos), size = 2.8, color = "white", fontface = "bold") +
+    labs(title = NULL,
+     y = NULL,
+     x = NULL) +
+  coord_flip() +
+  facet_wrap(~ hh_label) +
+  scale_fill_manual(values = c("turquoise3", "turquoise4")) +
+  guides(fill = guide_legend(reverse = TRUE)) + #reverse the legend order
+  theme_flip
+
+print(pov_hhlabel_pre)
+
+ggsave("pov_hhlabel_pre.png", width = 13, height = 7)
+
+#Chis-sqare tests
+chisq.test(table(df$poverty_level_pre, df$woman_emp))
+
+# 3-Way Frequency Table
+mytable <- xtabs(~poverty_level_pre+hh_label+woman_emp, data=df)
+ftable(mytable) # print table
+summary(mytable) # chi-square test of indepedence
+
+
+pov_hhlabel_post <- df %>% 
+  group_by(hh_label,woman_emp) %>% 
+  count(woman_emp, poverty_level_post) %>% 
+  mutate(perc = round(n / sum(n), 3),
+         pos = cumsum(perc) - 0.5*perc,
+          hovertext = paste(woman_emp, "\n", "Number of observations:", n, "\n", paste0("Percentage: ",perc *100,"%"))) %>% 
+  ggplot(aes(x = woman_emp, y = perc, fill = fct_rev(poverty_level_post), label = ifelse(perc >= 0.04, paste0(100*perc,"% ", "\n", "(",n,")"), ""))) +
+    geom_col(width = 0.3) +
+    geom_bar_text(position = "stack",  reflow = TRUE, colour = "white", place = "center", fontface = "bold", min.size = 4, size = 11) +
+    # geom_text(aes(label = ifelse(perc >= 0.06, paste0(100*perc,"% ", "(",n,")"), ""),y = pos), size = 2.8, color = "white", fontface = "bold") +
+    labs(title = NULL,
+     y = NULL,
+     x = NULL,
+     caption = caption) +
+  coord_flip() +
+  facet_wrap(~ hh_label, labeller = labeller(hh_label = c(native = "Native", mixed = "Mixed", migrant = "Migrant"))) +
+  scale_fill_manual(values = c("turquoise3", "turquoise4")) +
+  guides(fill = guide_legend(reverse = TRUE)) + #reverse the legend order
+  theme_flip
+
+print(pov_hhlabel_post)
+
+ggsave("pov_hhlabel_post.png", width = 13, height = 7)
+
+#Chis-sqare tests
+chisq.test(table(df$poverty_level_post, df$woman_emp))
+
+# 3-Way Frequency Table
+mytable <- xtabs(~poverty_level_post+hh_label+woman_emp, data=df)
+ftable(mytable) # print table
+summary(mytable) # chi-square test of indepedence
+```
+
+
+
+```{r}
+pre <- df %>% 
+  group_by(hh_label,  syear, woman_emp) %>% 
+  count(woman_emp, poverty_level_pre) %>% 
+  mutate(perc = round(n / sum(n), 3),
+         frame = "Pre-government") %>% 
+  filter(poverty_level_pre == "Relatively poor") %>% 
+  select(-c(n, poverty_level_pre)) %>% 
+  ungroup()
+
+post <- df %>% 
+  group_by(syear, hh_label,woman_emp) %>% 
+  count(woman_emp, poverty_level_post) %>% 
+  mutate(perc = round(n / sum(n), 3),
+         frame = "Post-government") %>% 
+  filter(poverty_level_post == "Relatively poor") %>% 
+  select(-c(n, poverty_level_post)) %>% 
+  ungroup()
+
+merged <- rbind(pre, post) %>% 
+  mutate(frame = factor(frame, levels = c("Pre-government", "Post-government")) )
+
+
+native <- pre%>% 
+  filter(hh_label == "native") %>% 
+  ggplot(aes(x=syear, y=perc, linetype = woman_emp, shape = woman_emp, group = woman_emp)) +
+  geom_line() +
+  geom_point(size = 3) +
+  labs(x = NULL,
+       y = "Poverty rate") +
+  theme_bw() +
+  theme(legend.position = "bottom",
+        legend.title = element_blank(),
+        legend.text = element_text(size = 14),
+        legend.background = element_blank(),
+        legend.box.background = element_rect(colour = "black"),
+        legend.key = element_blank(),
+        axis.text = element_text(size = 14),
+        axis.title = element_text(size = rel(1.5), color = "black"),
+        axis.line.x = element_line(colour = "grey"),
+        axis.ticks.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        strip.text.x = element_text(size = 14, face = "bold")) 
+
+print(native)
+
+ggsave("native.png", width = 12, height = 7)
+
+
+
+mixed <- pre%>% 
+  filter(hh_label == "mixed") %>% 
+  ggplot(aes(x=syear, y=perc, linetype = woman_emp, shape = woman_emp, group = woman_emp)) +
+  geom_line() +
+  geom_point(size = 3) +
+  labs(x = NULL,
+       y = "Poverty rate") +
+  theme_bw() +
+  theme(legend.position = "bottom",
+        legend.title = element_blank(),
+        legend.text = element_text(size = 14),
+        legend.background = element_blank(),
+        legend.box.background = element_rect(colour = "black"),
+        legend.key = element_blank(),
+        axis.text = element_text(size = 14),
+        axis.title = element_text(size = rel(1.5), color = "black"),
+        axis.line.x = element_line(colour = "grey"),
+        axis.ticks.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        strip.text.x = element_text(size = 14, face = "bold")) 
+
+print(mixed)
+
+ggsave("mixed.png", width = 12, height = 7)
+
+
+migrant <- pre%>% 
+  filter(hh_label == "migrant") %>% 
+  ggplot(aes(x=syear, y=perc, linetype = woman_emp, shape = woman_emp, group = woman_emp)) +
+  geom_line() +
+  geom_point(size = 3) +
+  labs(x = NULL,
+       y = "Poverty rate") +
+  theme_bw() +
+  theme(legend.position = "bottom",
+        legend.title = element_blank(),
+        legend.text = element_text(size = 14),
+        legend.background = element_blank(),
+        legend.box.background = element_rect(colour = "black"),
+        legend.key = element_blank(),
+        axis.text = element_text(size = 14),
+        axis.title = element_text(size = rel(1.5), color = "black"),
+        axis.line.x = element_line(colour = "grey"),
+        axis.ticks.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        strip.text.x = element_text(size = 14, face = "bold")) 
+
+print(migrant)
+
+ggsave("migrant.png", width = 12, height = 7)
+```
+
+```{r}
+fulltime <- pre%>% 
+  filter(woman_emp == "Full-time employed") %>% 
+  ggplot(aes(x=syear, y=perc, linetype = hh_label, shape = hh_label, group = hh_label)) +
+  geom_line() +
+  geom_point(size = 3) +
+  labs(x = NULL,
+       y = "Poverty rate") +
+  scale_linetype_discrete(labels=c("Migrant", "Mixed", "Native")) +
+  scale_shape_discrete(labels=c("Migrant", "Mixed", "Native")) +
+  guides(shape = guide_legend(reverse = TRUE)) + #reverse the legend order
+  guides(linetype = guide_legend(reverse = TRUE)) + #reverse the legend order
+  theme_bw() +
+  theme(legend.position = "bottom",
+        legend.title = element_blank(),
+        legend.text = element_text(size = 14),
+        legend.background = element_blank(),
+        legend.box.background = element_rect(colour = "black"),
+        legend.key = element_blank(),
+        axis.text = element_text(size = 14),
+        axis.title = element_text(size = rel(1.5), color = "black"),
+        axis.line.x = element_line(colour = "grey"),
+        axis.ticks.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        strip.text.x = element_text(size = 14, face = "bold")) 
+
+print(fulltime)
+
+ggsave("fulltime.png", width = 12, height = 7)
+
+
+parttime <- pre%>% 
+  filter(woman_emp == "Part-time employed") %>% 
+  ggplot(aes(x=syear, y=perc, linetype = hh_label, shape = hh_label, group = hh_label)) +
+  geom_line() +
+  geom_point(size = 3) +
+  labs(x = NULL,
+       y = "Poverty rate") +
+  scale_linetype_discrete(labels=c("Migrant", "Mixed", "Native")) +
+  scale_shape_discrete(labels=c("Migrant", "Mixed", "Native")) +
+  guides(shape = guide_legend(reverse = TRUE)) + #reverse the legend order
+  guides(linetype = guide_legend(reverse = TRUE)) + #reverse the legend order
+  theme_bw() +
+  theme(legend.position = "bottom",
+        legend.title = element_blank(),
+        legend.text = element_text(size = 14),
+        legend.background = element_blank(),
+        legend.box.background = element_rect(colour = "black"),
+        legend.key = element_blank(),
+        axis.text = element_text(size = 14),
+        axis.title = element_text(size = rel(1.5), color = "black"),
+        axis.line.x = element_line(colour = "grey"),
+        axis.ticks.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        strip.text.x = element_text(size = 14, face = "bold")) 
+
+print(parttime)
+
+ggsave("parttime.png", width = 12, height = 7)
+
+notime <- pre%>% 
+  filter(woman_emp == "Not employed") %>% 
+  ggplot(aes(x=syear, y=perc, linetype = hh_label, shape = hh_label, group = hh_label)) +
+  geom_line() +
+  geom_point(size = 3) +
+  labs(x = NULL,
+       y = "Poverty rate") +
+  scale_linetype_discrete(labels=c("Migrant", "Mixed", "Native")) +
+  scale_shape_discrete(labels=c("Migrant", "Mixed", "Native")) +
+  guides(shape = guide_legend(reverse = TRUE)) + #reverse the legend order
+  guides(linetype = guide_legend(reverse = TRUE)) + #reverse the legend order
+  theme_bw() +
+  theme(legend.position = "bottom",
+        legend.title = element_blank(),
+        legend.text = element_text(size = 14),
+        legend.background = element_blank(),
+        legend.box.background = element_rect(colour = "black"),
+        legend.key = element_blank(),
+        axis.text = element_text(size = 14),
+        axis.title = element_text(size = rel(1.5), color = "black"),
+        axis.line.x = element_line(colour = "grey"),
+        axis.ticks.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        strip.text.x = element_text(size = 14, face = "bold")) 
+
+print(notime)
+
+ggsave("notime.png", width = 12, height = 7)
+```
+

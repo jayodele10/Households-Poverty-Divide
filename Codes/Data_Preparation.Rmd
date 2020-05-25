@@ -1,0 +1,509 @@
+---
+title: "Data Preparation 2"
+author: "Aje Joshua Ayodele"
+date: "6 March 2020"
+output: html_document
+---
+
+
+```{r packages}
+#load libraries
+library(haven) #import stata files
+library(tidyverse) #for data preprocessing and visualization
+#library(descr)
+library(questionr)
+library(stargazer) # for reporting model summary
+library(ggplot2) # for awesome visualizations
+library(dagitty) # package to draw DAGs
+library(ggdag) # another package to draw DAGS
+library(estimatr) # summarize data sets
+#library(descr)
+```
+
+```{r functions}
+# Make list of variables
+  makeVlist <- function(dta) { 
+  labels <- sapply(dta, function(x) attr(x, "label"))
+  tibble(name = names(labels),
+         label = labels)
+  }
+```
+
+
+
+### Data Import
+```{r data import, warning=FALSE, message=FALSE}
+#import persoanl pfad data
+pfad <- read_dta("ppfad.dta")
+pfadLabels <- makeVlist(pfad)
+
+#import household path dataset
+hpfad <- read_dta("hpfad.dta") 
+hpfadLabels <- makeVlist(hpfad) 
+
+
+#import soep personal 2017 data - bhp
+#personal <- read_dta("bhp.dta")
+#personalLabels <- makeVlist(personal)
+
+#import the dataset containing weights
+#pweightdf <- read_dta("phrf.dta")
+#hweightdf <- read_dta("hhrf.dta")
+#hweightLabels <- makeVlist(hweightdf)
+
+
+#import generated dataset for personal dataset
+personal_gen <- read_dta("bhpgen.dta")
+#personal_genLabels <- makeVlist(personal_gen)
+
+#import soep household dataset for 2017 - bhh
+#hh <- read_dta("bhh.dta")
+#hhLabels <- makeVlist(hh)
+
+#import generated dataset for bhh
+hh_gen <- read_dta("bhhgen.dta")
+#hh_genList <- makeVlist(hh_gen)
+
+#import brutto dataset for household - NOT NEEDED
+# hh_brutto <- read_dta("bhhbrutto.dta")
+# hh_bruttoList <- makeVlist(hh_brutto)
+
+
+
+# import bhkind (child) dataset
+child <- read_dta("bhkind.dta") 
+#kidLabels <- makeVlist(kid)
+
+#import bioagel (parent-child) dataset
+bioage <- read_dta("bioagel.dta") 
+
+#import bhpequiv
+bhp_equiv <- read_dta("bhpequiv.dta")
+equivLabels <- makeVlist(bhp_equiv)
+```
+
+## Quick experimentation to get the age of the youngest child in a household
+```{r}
+# get required variables from pfad
+pfad2 <- pfad %>% select(persnr, bhhhnr, gebjahr) %>% 
+  mutate(age = 2017 - gebjahr) %>% arrange(persnr)
+
+# get required variables from bioage
+bioage2 <- bioage %>%  select(persnr, hhnrakt)
+
+#merge pfad and bioage
+bioage2 <- merge(pfad2, bioage2, by = ("persnr")) %>% 
+  group_by(hhnrakt) %>% 
+  mutate(age_youngest = min(age)) %>%
+  ungroup()  %>% 
+  select(bhhhnr, age_youngest) %>% 
+  filter(bhhhnr != -2) %>% 
+  distinct(bhhhnr, .keep_all = TRUE) %>% 
+  arrange(bhhhnr)
+
+# get required variables from kid
+child2 <- child %>% select(persnr, hid, bhkgjahr, bhkzahl)
+
+# calculate age of youngetst child per household
+child2 <- merge(pfad2, child2, by = ("persnr")) %>% 
+  select(bhhhnr, age, bhkzahl) %>% 
+  group_by(bhhhnr) %>% 
+  mutate(age_youngest = min(age)) %>% 
+  ungroup() %>% 
+  distinct(bhhhnr, .keep_all = TRUE) %>% 
+  select(bhhhnr, age_youngest, bhkzahl) %>% 
+  arrange(bhhhnr)
+
+# child2 contains households not in bioage2 and vice-versa, merge both
+
+child3 <- full_join(child2, bioage2, by = "bhhhnr") %>% arrange(bhhhnr)
+
+# fill NA values in age_youngest.x with corresponding values in age_youngest.y
+for (i in 1:nrow(child3)) {
+  if (is.na(child3[i, "age_youngest.x"])) {
+    child3[i, "age_youngest.x"] <- child3[i, "age_youngest.y"]
+  }
+}
+
+child3 <- child3 %>% select(-age_youngest.y) %>% 
+  rename(age_youngest = "age_youngest.x")
+
+#save dataset
+write.csv(child3, file = "child3.csv", row.names = FALSE)
+
+#remove non-required datasets
+rm(pfad2, bioage2, child2)
+```
+
+### Variable Selection
+We select required variables from the respective datasets
+```{r}
+# PFAD
+core_p <- pfad %>% 
+  select(persnr, sex, gebjahr, psample, bhhhnr, bhnetto, bhsampreg, bhpop,
+        immiyear, germborn, corigin, migback) %>% 
+  filter(!psample %in% c(17, 18, 19), #exclude refugees
+         between(bhnetto, 10, 19), #successful interviews
+         bhpop %in% c(1,2)) %>% #private households (1- German HH-head; 2: Foreign)
+  mutate(age = 2017 - gebjahr) %>% 
+  filter(between(age, 25, 64)) %>% 
+  arrange(persnr)
+
+
+# GENERATED PERSONAL DATASET
+personal_gen <- personal_gen %>% 
+  select(persnr, bhhhnr, bhbilzeit, bhfamstd, emplst17, 
+         isced11_17, partnr17) %>% 
+  rename(
+    "amt_edu_yrs" = bhbilzeit,
+    "marital_status" = bhfamstd,
+    "emp_status" = emplst17,
+    "edu_level" = isced11_17,
+    "partner_persnr" = partnr17
+  ) %>% 
+  filter(marital_status %in% c(1, 7)) %>% #married or registered partnership living together
+  arrange(persnr)
+
+## HOUSEHOLD GENERATED DATASET
+hh_gen <- hh_gen %>% select(bhhhnr, nuts117, typ1hh17, typ2hh17, hinc17) %>% 
+  rename(
+    state = "nuts117",
+    hhtype1 = "typ1hh17",
+    hhtype2 = "typ2hh17",
+  ) %>% 
+  arrange(bhhhnr)
+
+
+# BHP_EQUIV DATASET
+bhp_equiv <- bhp_equiv %>% 
+  select(bhhhnr, persnr, d1110517, d1110617, d1110717,i1110117, i1110217, w1110217) %>% 
+  rename(
+    "rel_to_head" = d1110517,
+    "hh_size" = d1110617,
+    "num_kids" = d1110717,
+    "pregov_income" = i1110117,
+    "postgov_income" = i1110217,
+    "hh_weight" = w1110217
+  ) %>% 
+  arrange(persnr)
+```
+
+### Data Merging
+
+```{r}
+core_p <- core_p %>% arrange(bhhhnr)
+
+#merge the core (pfad) data and the hh_gen data
+merge1 <- merge(core_p, hh_gen, by = c("bhhhnr")) %>% arrange(persnr)
+
+# merge the newly merged data with the personal_gen dataset
+merge2 <- merge(merge1, personal_gen, by = c("persnr", "bhhhnr")) %>% arrange(persnr)
+rm(merge1)
+
+#merge with bhp_equiv
+merge3 <- merge(merge2, bhp_equiv, by = c("persnr", "bhhhnr")) %>% arrange(bhhhnr)
+rm(merge2)
+```
+
+
+### Data Wrangling
+```{r}
+# some data wrangling
+merge3 <- merge3 %>%  
+  mutate(adult = hh_size - num_kids,
+  other_adult = adult - 1,
+  pregov_income_eq = pregov_income / (1 + other_adult * 0.5 + num_kids * 0.3),
+  postgov_income_eq = postgov_income / (1 + other_adult * 0.5 + num_kids * 0.3),
+  poverty_level_pre = ifelse(pregov_income_eq >= (median(pregov_income_eq) * 0.60), "Not poor", "Relatively poor"),
+  poverty_level_post = ifelse(postgov_income_eq >= (median(postgov_income_eq) * 0.60), "Not poor", "Relatively poor"),
+  poverty_level_pre = factor(poverty_level_pre), 
+  poverty_level_post = factor(poverty_level_post),
+  #num_kids = case_when(
+    #num_kids == 0 ~ "No child",
+    #num_kids == 1 ~ "1 child",
+    #num_kids == 2 ~ "2 children",
+    #TRUE ~ "3 or more children"),
+  #num_kids = factor(num_kids),
+  rel_to_head = case_when(
+    rel_to_head == 1 ~ "Head",
+    rel_to_head == 2 ~ "Partner",
+    rel_to_head == 3 ~ "Child",
+    rel_to_head == 4 ~ "Relative",
+    TRUE ~ "Nonrelative"),
+  sex = ifelse(sex == 1, "Male", "Female"),
+  sex = factor(sex),
+  emp_status = case_when(
+  emp_status == 1 ~ "Full-time employed",
+  emp_status == 2 | emp_status == 4 ~ "Part-time employed",
+  TRUE ~ "Not employed"),
+  emp_status = factor(emp_status),
+  germborn = case_when(
+    germborn == 1 & migback == 1 ~ "native",
+    germborn == 1 & migback == 3 ~ "second_gen migrant",
+    TRUE ~ "first_gen migrant"),
+  germborn = factor(germborn),
+  edu_level = case_when(
+    between(edu_level, 0, 2) ~ "Low",
+    edu_level %in% c(3,4) ~ "Middle",
+    between(edu_level, 5, 8) ~ "High",
+    TRUE ~ "NA"),
+  edu_level = factor(edu_level),
+  bhpop = ifelse(bhpop == 1, "German HH-Head", "Foreign HH-Head"),
+        bhpop = factor(bhpop)) %>% 
+  filter(!hhtype1 %in% c(3, 7, 8), # exclude other non-couple households
+         !rel_to_head %in% c("Child", "Relative", "Nonrelative"), # restrict sample to household head and partner
+         !partner_persnr < 0) %>% #remove persons whose spouse are not included in the survey data
+  arrange(bhhhnr) 
+
+
+#rearrange column order
+my_df <- merge3 %>%  select(bhhhnr, persnr, sex, bhpop, rel_to_head, age, germborn, migback, corigin, edu_level, emp_status, hh_size, num_kids, partner_persnr, hhtype2, adult, other_adult, pregov_income_eq, postgov_income_eq, poverty_level_pre, poverty_level_post, hh_weight)
+
+#get unique personal id for all individuals who both completed the survey with their spouse
+partner_persnr <- my_df$partner_persnr
+
+unique_pernsr <- sort(union(my_df$persnr, partner_persnr))
+
+#get unique household numbers
+unique_bhhhnr <- sort(unique(my_df$bhhhnr))
+```
+
+
+We repeat the same variable selection step having obtained the unique personal ids of my_df. The purpose of repeating this step is to use the unique personal ids to filter our pfad dataset such that the dataset contains only the individuals whose  spuse also successfuly completed the survey 
+```{r}
+# PFAD: extract couples using unique_persnr
+core_p_rep <- pfad %>% 
+  select(persnr, sex, gebjahr, psample, bhhhnr, bhnetto, bhsampreg, bhpop,
+        immiyear, germborn, corigin, migback) %>% 
+  filter(persnr %in% unique_pernsr) %>%  #extract the couples using unique_persnr
+  arrange(persnr)
+
+#read in original personal generated dataset 
+personal_gen_rep <- read_dta("bhpgen.dta")
+
+# GENERATED PERSONAL DATASET: extract couples using unique_persnr
+personal_gen_rep <- personal_gen_rep %>% 
+  select(persnr, bhhhnr, bhbilzeit, bhfamstd, emplst17, 
+         isced11_17, partnr17) %>% 
+  filter(persnr %in% unique_pernsr) %>% # get the couples using unique_pernsr
+  rename(
+    "amt_edu_yrs" = bhbilzeit,
+    "marital_status" = bhfamstd,
+    "emp_status" = emplst17,
+    "edu_level" = isced11_17,
+    "partner_persnr" = partnr17
+  ) %>% 
+  arrange(persnr)
+
+#read in original personal generated dataset 
+bhp_equiv_rep <- read_dta("bhpequiv.dta")
+
+# BHP_EQUIV DATASET: extract couples using unique_persnr
+bhp_equiv_rep <- bhp_equiv_rep %>% 
+  select(bhhhnr, persnr, d1110517, d1110617, d1110717,i1110117, i1110217, w1110217) %>% 
+  filter(persnr %in% unique_pernsr) %>% # get the couples using unique_pernsr
+  rename(
+    "rel_to_head" = d1110517,
+    "hh_size" = d1110617,
+    "num_kids" = d1110717,
+    "pregov_income" = i1110117,
+    "postgov_income" = i1110217,
+    "hh_weight" = w1110217
+  ) %>% 
+  arrange(persnr)
+```
+
+
+### REMERGING OF DATASETS
+```{r}
+core_p_rep <- core_p_rep %>% arrange(bhhhnr)
+
+#merge the core_p_rep data and the hh_gen data
+merge1 <- merge(core_p_rep, hh_gen, by = c("bhhhnr"))
+
+merge1 <- merge1 %>% arrange(persnr)
+
+# merge the newly merged data with the personal_gen_rep dataset
+merge2 <- merge(merge1, personal_gen_rep, by = c("persnr", "bhhhnr"))
+rm(merge1)
+merge2 <- merge2 %>% arrange(persnr)
+
+#merge with bhp_equiv
+merge3 <- merge(merge2, bhp_equiv_rep, by = c("persnr", "bhhhnr"))
+rm(merge2)
+merge3 <- merge3 %>% arrange(bhhhnr)
+
+# some data wrangling
+merge3 <- merge3 %>%  
+  mutate(adult = hh_size - num_kids,
+  other_adult = adult - 1,
+  pregov_income_eq = pregov_income / (1 + other_adult * 0.5 + num_kids * 0.3),
+  postgov_income_eq = postgov_income / (1 + other_adult * 0.5 + num_kids * 0.3),
+  poverty_level_pre = ifelse(pregov_income_eq >= (median(pregov_income_eq) * 0.60), "Not poor", "Relatively poor"),
+  poverty_level_post = ifelse(postgov_income_eq >= (median(postgov_income_eq) * 0.60), "Not poor", "Relatively poor"),
+  poverty_level_pre = factor(poverty_level_pre), 
+  poverty_level_post = factor(poverty_level_post),
+  rel_to_head = case_when(
+    rel_to_head == 1 ~ "Head",
+    rel_to_head == 2 ~ "Partner",
+    rel_to_head == 3 ~ "Child",
+    rel_to_head == 4 ~ "Relative",
+    TRUE ~ "Nonrelative"),
+  sex = ifelse(sex == 1, "Male", "Female"),
+  sex = factor(sex),
+  emp_status = case_when(
+  emp_status == 1 ~ "Full-time employed",
+  emp_status == 2 | emp_status == 4 ~ "Part-time employed",
+  TRUE ~ "Not employed"),
+  emp_status = factor(emp_status),
+  germborn = case_when(
+    germborn == 1 & migback == 1 ~ "native",
+    germborn == 1 & migback == 3 ~ "second_gen migrant",
+    TRUE ~ "first_gen migrant"),
+  germborn = factor(germborn),
+  edu_level = case_when(
+    between(edu_level, 0, 2) ~ "Low",
+    edu_level %in% c(3,4) ~ "Middle",
+    between(edu_level, 5, 8) ~ "High",
+    TRUE ~ "NA"),
+  edu_level = factor(edu_level),
+  bhpop = ifelse(bhpop == 1, "German HH-Head", "Foreign HH-Head"),
+  bhpop = factor(bhpop),
+  age = 2017 - gebjahr) %>% 
+  arrange(bhhhnr) 
+
+
+#rearrange column order
+my_df <- merge3 %>%  select(bhhhnr, persnr, sex, bhpop, rel_to_head, age, germborn, migback, corigin, edu_level, emp_status, hh_size, num_kids, partner_persnr, hhtype2, adult, other_adult, pregov_income_eq, postgov_income_eq, poverty_level_pre, poverty_level_post, hh_weight)
+
+#filter for couples between the age of 25 and 65
+remove_age <- my_df %>% filter(!between(age, 25, 64)) %>% select(bhhhnr, persnr, age)
+remove_bhhnr <- remove_age$bhhhnr
+
+#remove household with either couple being under-25 or over-64
+my_df<- my_df %>% filter(!bhhhnr %in% remove_bhhnr)
+
+#calculate freq distribution of the unique household ids
+bhhhnr_freq<- table(my_df$bhhhnr)
+
+#retain households with duplicate unique ids (i.e. for husband and wive)
+my_df <- subset(my_df, bhhhnr %in% names(bhhhnr_freq[bhhhnr_freq > 1]))
+
+# remove same-sex couple
+#get unique HH id  for the men in the sample
+unq_hus <- unique(my_df[my_df$sex == "Male", "bhhhnr"])
+
+#get unique HH id  for the women in the sample
+unq_wife <- unique(my_df[my_df$sex == "Female", "bhhhnr"])
+
+#get unique household ids
+unq <- unique(my_df$bhhhnr)
+
+# extract households where both spouses are women
+same_sex1 <- setdiff(unq, unq_hus)
+
+# extract households where both spouses are men
+same_sex2 <- setdiff(unq, unq_wife)
+
+#remove same-sex couple households
+my_df <- my_df %>% filter(!bhhhnr %in% same_sex1,
+                          !bhhhnr %in% same_sex2)
+```
+
+
+
+```{r}
+#getting characteristics of the male spouse
+husband_educ <- my_df %>% filter(sex == "Male") %>% select(bhhhnr, edu_level) %>% rename("mspouse_edu" = edu_level)
+husband_age <- my_df %>% filter(sex == "Male") %>% select(bhhhnr, age) %>% rename("mspouse_age" = age)
+husband_emp <- my_df %>% filter(sex == "Male") %>% select(bhhhnr, emp_status) %>% rename("mspouse_emp" = emp_status)
+husband_bg <- my_df %>% filter(sex == "Male") %>% select(bhhhnr, germborn) %>% rename("mspouse_bg" = germborn)
+
+#getting characteristics of the female spouse
+wife_educ <- my_df %>% filter(sex == "Female") %>% select(bhhhnr, edu_level) %>% rename("woman_edu" = edu_level)
+wife_age <- my_df %>% filter(sex == "Female") %>% select(bhhhnr, age) %>% rename("woman_age" = age)
+wife_emp <- my_df %>% filter(sex == "Female") %>% select(bhhhnr, emp_status) %>% rename("woman_emp" = emp_status)
+wife_bg <- my_df %>% filter(sex == "Female") %>% select(bhhhnr, germborn) %>% rename("woman_bg" = germborn)
+
+#add this infos to the data set
+my_df <- merge(my_df, husband_educ, by = "bhhhnr")
+my_df <- merge(my_df, husband_age, by = "bhhhnr")
+my_df <- merge(my_df, husband_emp, by = "bhhhnr")
+my_df <- merge(my_df, husband_bg, by = "bhhhnr")
+my_df <- merge(my_df, wife_educ, by = "bhhhnr")
+my_df <- merge(my_df, wife_age, by = "bhhhnr")
+my_df <- merge(my_df, wife_emp, by = "bhhhnr")
+my_df <- merge(my_df, wife_bg, by = "bhhhnr")
+
+
+#label the households
+label_table <- my_df %>% 
+  mutate(hh_label = case_when(
+        mspouse_bg == "native" & woman_bg == "native" ~ "native",
+        (mspouse_bg == "native" & woman_bg == "first_gen migrant") | (mspouse_bg == "first_gen migrant" & woman_bg == "native") ~ "mixed",
+        (mspouse_bg == "native" & woman_bg == "second_gen migrant") | (mspouse_bg == "second_gen migrant" & woman_bg == "native") ~ "mixed",
+        TRUE ~ "migrant")) %>% 
+  filter(rel_to_head == "Head") %>% 
+  select(bhhhnr, hh_label)
+
+
+#merge label table with my_df
+my_df <- merge(my_df, label_table, by = "bhhhnr")
+
+# merge my_df with child table 
+
+my_df2 <- left_join(my_df, child3, by = "bhhhnr")
+
+#get final data set
+final_df <- my_df2 %>% 
+  distinct(bhhhnr, .keep_all = TRUE) %>%
+  select(bhhhnr, mspouse_age, mspouse_edu, mspouse_emp, woman_age, woman_edu, woman_emp,
+         hh_size, num_kids, age_youngest, adult, other_adult, pregov_income_eq, postgov_income_eq, poverty_level_pre, poverty_level_post, hh_label, hh_weight)
+
+final_df <- final_df %>% 
+  filter(woman_edu != "NA",
+         mspouse_edu != "NA") %>% 
+  mutate(
+  hh_label = factor(hh_label),
+  num_kids = case_when(
+    num_kids == 0 ~ "childless",
+    num_kids == 1 ~ "1 child",
+    num_kids == 2 ~ "2 children",
+    TRUE ~ "3 or more children"
+  ),
+  num_kids = factor(num_kids),
+  pre_school = case_when(
+    age_youngest >= 0 & age_youngest <=6 ~ "With",
+    TRUE ~ "Without"
+  ),
+  pre_school = factor(pre_school),
+  mspouse_age = case_when(
+    mspouse_age >= 25 & mspouse_age <= 35 ~ "25-35",
+    mspouse_age >= 36 & mspouse_age <= 50 ~ "36-50",
+    TRUE ~ "51-64"
+  ),
+  mspouse_age = factor(mspouse_age),
+  woman_age = case_when(
+    woman_age >= 25 & woman_age <= 35 ~ "25-35",
+    woman_age >= 36 & woman_age <= 50 ~ "36-50",
+    TRUE ~ "51-64"
+  ),
+  woman_age = factor(woman_age),
+  syear = 2017
+) %>% 
+  select(-c("age_youngest")) %>% 
+  droplevels.data.frame()
+
+
+#change reference categories
+final_df$mspouse_edu <- fct_relevel(final_df$mspouse_edu, "Low", after = 2)
+final_df$mspouse_emp <- fct_relevel(final_df$mspouse_emp, "Not employed", after = 2)
+final_df$woman_edu <- fct_relevel(final_df$woman_edu, "Low", after = 2)
+final_df$woman_emp <- fct_relevel(final_df$woman_emp, "Not employed", after = 2)
+final_df$num_kids <- fct_relevel(final_df$num_kids, "childless")
+final_df$pre_school <- fct_relevel(final_df$pre_school, "Without")
+
+saveRDS(final_df, "final_df17.RData")
+```
+
+
