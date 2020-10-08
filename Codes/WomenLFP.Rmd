@@ -23,7 +23,7 @@ wlfp <- lfp %>%
   geom_col(position = "dodge") +
   labs(x = NULL,
        y = "Percent",
-       caption = "OECD Statistics, 2017") +
+       caption = "OECD Statistics") +
   scale_fill_manual(values = c("turquoise3", "turquoise4")) +
   theme_minimal() +
   theme(legend.title = element_blank(),
