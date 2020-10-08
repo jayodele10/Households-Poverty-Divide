@@ -6,7 +6,6 @@ output: html_document
 ```{r}
 # Import libraries
 library(tidyverse)
-install.packages("gghighlight")
 library(gghighlight)
 
 ```
@@ -23,7 +22,8 @@ wlfp <- lfp %>%
   ggplot(aes(x=Country, y=Value, fill = Time)) +
   geom_col(position = "dodge") +
   labs(x = NULL,
-       y = "Percent") +
+       y = "Percent",
+       caption = "OECD Statistics, 2017") +
   scale_fill_manual(values = c("turquoise3", "turquoise4")) +
   theme_minimal() +
   theme(legend.title = element_blank(),
@@ -34,28 +34,11 @@ wlfp <- lfp %>%
         axis.text.x = element_text(size = 14),
         axis.title.y = element_text(size = 14),
         strip.text = element_text(size = 13),
-        legend.background = element_rect(color = "grey")) 
+        legend.background = element_rect(color = "grey"),
+        plot.caption = element_text(size = 14, face = "italic")) 
 
 print(wlfp)
 
-ggsave("wlfp.png", height = 8, width = 12)
-
-
-theme_flip <- theme(panel.background = element_rect(fill = "white"),
-        axis.text = element_text(size = 25, face = "bold"),
-        axis.text.x = element_blank(),
-        axis.title = element_text(size = rel(1)),
-        axis.ticks = element_blank(),
-        axis.line.y = element_line(colour = "grey"),
-        #plot.title = element_text(size=15, hjust = 0, vjust=2.12),
-        legend.position = "bottom",
-        legend.title = element_blank(),
-        legend.text = element_text(size = 22),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        plot.title = element_text(hjust = 0),
-        plot.background = element_rect(fill = "white"),
-        plot.caption = element_text(size = 14, face = "italic"),
-        strip.text.x = element_text(size = 11, face = "bold"))
+ggsave("Images/wlfp.png", height = 8, width = 12)
 ```
 

@@ -9,14 +9,37 @@ output: html_document
 # Import libraries
 library(ggthemes)
 library(gpairs)
-library(ggrepel)
-#library(extrafont)
-library(RColorBrewer)
 library(descr)
 library(summarytools)
 library(ggfittext)
 ```
 
+```{r themes, include = FALSE}
+# set new themes for the plots
+theme_flip <- theme(panel.background = element_rect(fill = "white"),
+        axis.text = element_text(size = 15, face = "bold"),
+        axis.text.x = element_blank(),
+        axis.title = element_text(size = rel(1)),
+        axis.ticks = element_blank(),
+        axis.line.y = element_line(colour = "grey"),
+        axis.line.y.right = element_line(colour = "grey"),
+        axis.line.x = element_line(colour = "grey"),
+        axis.line.x.top = element_line(color = "grey"),
+        #plot.title = element_text(size=15, hjust = 0, vjust=2.12),
+        legend.position = "bottom",
+        legend.title = element_blank(),
+        legend.text = element_text(size = 15),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        plot.title = element_text(hjust = 0),
+        plot.background = element_rect(fill = "white"),
+        plot.caption = element_text(size = 14, face = "italic"),
+        strip.text.x = element_text(size = 15, face = "bold"),
+        strip.background.x = element_rect(fill = "light grey"))
+
+caption <- "The German Socio-Economic Panel Survey, 2017"
+
+```
 
 ```{r}
 # Load the datasets
@@ -56,35 +79,6 @@ ct_pov_post <- crosstab(df$poverty_level_post, df$woman_emp,
                        prop.c = TRUE)
 
 print(ct_pov_post)
-```
-
-
-
-```{r themes, include = FALSE}
-# set new themes for the plots
-theme_flip <- theme(panel.background = element_rect(fill = "white"),
-        axis.text = element_text(size = 15, face = "bold"),
-        axis.text.x = element_blank(),
-        axis.title = element_text(size = rel(1)),
-        axis.ticks = element_blank(),
-        axis.line.y = element_line(colour = "grey"),
-        axis.line.y.right = element_line(colour = "grey"),
-        axis.line.x = element_line(colour = "grey"),
-        axis.line.x.top = element_line(color = "grey"),
-        #plot.title = element_text(size=15, hjust = 0, vjust=2.12),
-        legend.position = "bottom",
-        legend.title = element_blank(),
-        legend.text = element_text(size = 15),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        plot.title = element_text(hjust = 0),
-        plot.background = element_rect(fill = "white"),
-        plot.caption = element_text(size = 14, face = "italic"),
-        strip.text.x = element_text(size = 15, face = "bold"),
-        strip.background.x = element_rect(fill = "light grey"))
-
-caption <- "The German Socio-Economic Panel Survey, 2017"
-
 ```
 
 We make a plot of poverty level by household type and women's employment status

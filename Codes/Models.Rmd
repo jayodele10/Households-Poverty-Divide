@@ -9,6 +9,30 @@ library(tidyverse)
 library(sjPlot)
 library(stargazer)
 library(ggthemes)
+library( ggfittext )
+```
+
+
+```{r}
+#custom_theme
+theme_flip <- theme(panel.background = element_rect(fill = "white", color = "grey"),
+        axis.text = element_text(size = 16, face = "bold"),
+        axis.text.y = element_blank(),
+        axis.title = element_text(size = rel(1)),
+        axis.ticks = element_blank(),
+        axis.line.x = element_line(colour = "grey"),
+        axis.line.y.right = element_line(colour = "grey"),
+        #plot.title = element_text(size=15, hjust = 0, vjust=2.12),
+        legend.position = "bottom",
+        legend.title = element_blank(),
+        legend.text = element_text(size = 16),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        plot.title = element_text(hjust = 0),
+        plot.background = element_rect(fill = "white"),
+        plot.caption = element_text(size = 14, face = "italic"),
+        strip.text.x = element_text(size = 15, face = "bold"),
+        strip.background.x = element_rect(fill = "light grey"))
 ```
 
 
@@ -85,6 +109,7 @@ stargazer(model1,
           covariate.labels = c("Mixed", "Migrant", "WAge 36-50", "WAge 51-64", "WMiddle", "WHigh", "WPart-time employed", "WFull-time employed", "1 child", "2 children", "3 or more children", "With", "MAge 36-50", "MAge 51-64", "MMiddle", "MHigh", "MPart-time employed", "MFull-time employed", "Constant"))
 ```
 
+
 ```{r}
 # Model 2: Interaction
 model2 <- glm(poverty_level_post ~ hh_label:woman_emp+woman_age+woman_edu+num_kids+pre_school +mspouse_age + mspouse_edu+mspouse_emp,
@@ -98,27 +123,6 @@ model2_p.values <- list(summary(model2)$coefficients[,4])
 stargazer(model2,
           coef = list(model2_OR), 
           p=c(model2_p.values),
-          single.row = F,
-          type = "text",
-          title = "Binary Logistic Regression",
-          dep.var.labels = c("Poverty"),
-          out = "model2.doc")
-```
-
-
-```{r}
-# Model 2: Interaction
-model3 <- glm(poverty_level_post ~ woman_emp:hh_label+woman_age+woman_edu+num_kids+pre_school +mspouse_age + mspouse_edu+mspouse_emp,
-              data = df, 
-              family=binomial())
-
-model3_OR <- exp(coef(model3))
-model3_CI <- exp(confint(model3))
-model3_p.values <- list(summary(model3)$coefficients[,4])
-
-stargazer(model3,
-          coef = list(model3_OR), 
-          p=c(model3_p.values),
           single.row = F,
           type = "text",
           title = "Binary Logistic Regression",
@@ -161,37 +165,5 @@ print(prob_poor)
 
 ggsave("prob_poor.png", width = 12, height = 8)
 
-```
-
-
-```{r}
-theme_flip <- theme(panel.background = element_rect(fill = "white", color = "grey"),
-        axis.text = element_text(size = 16, face = "bold"),
-        axis.text.y = element_blank(),
-        axis.title = element_text(size = rel(1)),
-        axis.ticks = element_blank(),
-        axis.line.x = element_line(colour = "grey"),
-        axis.line.y.right = element_line(colour = "grey"),
-        #plot.title = element_text(size=15, hjust = 0, vjust=2.12),
-        legend.position = "bottom",
-        legend.title = element_blank(),
-        legend.text = element_text(size = 16),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        plot.title = element_text(hjust = 0),
-        plot.background = element_rect(fill = "white"),
-        plot.caption = element_text(size = 14, face = "italic"),
-        strip.text.x = element_text(size = 15, face = "bold"),
-        strip.background.x = element_rect(fill = "light grey"))
-```
-
-
-```{r}
-get_model_data(
-  model1,
-  type = "pred",
-  digits = 2,
-  terms = c("hh_label")
-)
 ```
 

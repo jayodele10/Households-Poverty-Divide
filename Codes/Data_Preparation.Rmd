@@ -10,14 +10,12 @@ output: html_document
 #load libraries
 library(haven) #import stata files
 library(tidyverse) #for data preprocessing and visualization
-#library(descr)
 library(questionr)
 library(stargazer) # for reporting model summary
 library(ggplot2) # for awesome visualizations
 library(dagitty) # package to draw DAGs
 library(ggdag) # another package to draw DAGS
 library(estimatr) # summarize data sets
-#library(descr)
 ```
 
 ```{r functions}
@@ -31,7 +29,7 @@ library(estimatr) # summarize data sets
 
 
 
-### Data Import
+## Data Import
 ```{r data import, warning=FALSE, message=FALSE}
 #import persoanl pfad data
 pfad <- read_dta("ppfad.dta")
@@ -41,34 +39,12 @@ pfadLabels <- makeVlist(pfad)
 hpfad <- read_dta("hpfad.dta") 
 hpfadLabels <- makeVlist(hpfad) 
 
-
-#import soep personal 2017 data - bhp
-#personal <- read_dta("bhp.dta")
-#personalLabels <- makeVlist(personal)
-
-#import the dataset containing weights
-#pweightdf <- read_dta("phrf.dta")
-#hweightdf <- read_dta("hhrf.dta")
-#hweightLabels <- makeVlist(hweightdf)
-
-
 #import generated dataset for personal dataset
 personal_gen <- read_dta("bhpgen.dta")
-#personal_genLabels <- makeVlist(personal_gen)
-
-#import soep household dataset for 2017 - bhh
-#hh <- read_dta("bhh.dta")
-#hhLabels <- makeVlist(hh)
 
 #import generated dataset for bhh
 hh_gen <- read_dta("bhhgen.dta")
 #hh_genList <- makeVlist(hh_gen)
-
-#import brutto dataset for household - NOT NEEDED
-# hh_brutto <- read_dta("bhhbrutto.dta")
-# hh_bruttoList <- makeVlist(hh_brutto)
-
-
 
 # import bhkind (child) dataset
 child <- read_dta("bhkind.dta") 
@@ -82,7 +58,7 @@ bhp_equiv <- read_dta("bhpequiv.dta")
 equivLabels <- makeVlist(bhp_equiv)
 ```
 
-## Quick experimentation to get the age of the youngest child in a household
+### Quick experimentation to get the age of the youngest child in a household
 ```{r}
 # get required variables from pfad
 pfad2 <- pfad %>% select(persnr, bhhhnr, gebjahr) %>% 
@@ -135,7 +111,7 @@ write.csv(child3, file = "child3.csv", row.names = FALSE)
 rm(pfad2, bioage2, child2)
 ```
 
-### Variable Selection
+## Variable Selection
 We select required variables from the respective datasets
 ```{r}
 # PFAD
@@ -188,7 +164,7 @@ bhp_equiv <- bhp_equiv %>%
   arrange(persnr)
 ```
 
-### Data Merging
+## Data Merging
 
 ```{r}
 core_p <- core_p %>% arrange(bhhhnr)
@@ -206,7 +182,7 @@ rm(merge2)
 ```
 
 
-### Data Wrangling
+## Data Wrangling
 ```{r}
 # some data wrangling
 merge3 <- merge3 %>%  
@@ -269,7 +245,8 @@ unique_bhhhnr <- sort(unique(my_df$bhhhnr))
 ```
 
 
-We repeat the same variable selection step having obtained the unique personal ids of my_df. The purpose of repeating this step is to use the unique personal ids to filter our pfad dataset such that the dataset contains only the individuals whose  spuse also successfuly completed the survey 
+We repeat the same variable selection step having obtained the unique personal ids of my_df. The purpose of repeating this step is to use the unique personal ids to filter our pfad dataset such that the dataset contains only the individuals whose  spuse also successfuly completed the survey. 
+
 ```{r}
 # PFAD: extract couples using unique_persnr
 core_p_rep <- pfad %>% 
@@ -314,7 +291,7 @@ bhp_equiv_rep <- bhp_equiv_rep %>%
 ```
 
 
-### REMERGING OF DATASETS
+## REMERGING OF DATASETS
 ```{r}
 core_p_rep <- core_p_rep %>% arrange(bhhhnr)
 
